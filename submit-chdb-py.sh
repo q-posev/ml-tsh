@@ -47,5 +47,10 @@ export OMP_PROC_BIND=true
 
 # run using chdb placement tool
 # do not forget to change schnet to demonnano if real TD-DFTB energies and forces have to be used
-srun $(placement) chdb --in-dir $TMP_DEMON --in-type xyz --command 'cd %dirname% ; sleep $CHDB_RANK; python tsh-driver.py 4000 0.25 schnet >> logfile' --verbose --on-error errors.txt
+srun $(placement) chdb \
+--in-dir $TMP_DEMON \
+--in-type xyz \
+--command 'cd %dirname% ; sleep $CHDB_RANK; python tsh-driver.py 4000 0.25 schnet zn >> logfile' \
+--verbose \
+--on-error errors.txt
 
