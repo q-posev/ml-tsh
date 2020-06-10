@@ -1,4 +1,4 @@
-from os import path
+from os import path, fsync
 from sys import argv
 
 from schnetpack.interfaces import SpkCalculator
@@ -204,7 +204,7 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
         sum_G = force_up_t2+force_down_t2
         dGc = (force_up_t2-force_down_t2) - (force_up_t1-force_down_t1)
         dGc /= dt
-        print(dGc) 
+        #print(dGc) 
         
         factor=gap_12[j_md-1]/(4.0*np.tensordot(dGc,velocities))        
  
@@ -255,16 +255,16 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
         if do_hop and (not hop):
             xi = np.random.rand(1)
             if xi <= p_lz and xi > p_zn and do_lz:
-                print('Hop according to Landau-Zener at {}'.format(j_md-1))
-                print('Landau-Zener prob: {}'.format(float(p_lz)))
+                print('Hop according to Landau-Zener at {}'.format(j_md-1),flush=True)
+                print('Landau-Zener prob: {}'.format(float(p_lz)),flush=True)
                 hop = True
             elif xi <= p_zn and xi > p_lz and do_zn:
-                print('Hop according to Zhu-Nakamura at {}'.format(j_md-1))
-                print('Zhu-Nakamura prob: {}'.format(float(p_zn)))
+                print('Hop according to Zhu-Nakamura at {}'.format(j_md-1),flush=True)
+                print('Zhu-Nakamura prob: {}'.format(float(p_zn)),flush=True)
                 hop = True
             elif xi <= p_zn and xi <= p_lz and do_both:
-                print('Hop according to LZ and ZN at {} !'.format(j_md-1))
-                print('LZ and ZN probs: {0} {1}'.format(float(p_lz),float(p_zn)))
+                print('Hop according to LZ and ZN at {} !'.format(j_md-1),flush=True)
+                print('LZ and ZN probs: {0} {1}'.format(float(p_lz),float(p_zn)),flush=True)
                 hop = True
 
             betta = gap_12[j_md-1]/ekin
@@ -295,6 +295,8 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
 
     if j_md != 0:
         df.write('{0:0.2f} {1:0.4f} {2} {3} {4}\n'.format(t_step[j_md-1],gap_12[j_md-1]*Hartree,float(p_zn),float(p_lz),flag_es))
+        df.flush()
+        fsync(df)
     
     j_md += 1
 
