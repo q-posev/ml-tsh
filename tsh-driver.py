@@ -1,7 +1,6 @@
 from os import path
 from sys import argv
 
-import schnetpack as spk
 from schnetpack.interfaces import SpkCalculator
 from schnetpack.utils import load_model
 
@@ -13,44 +12,46 @@ from ase.md.verlet import VelocityVerlet
 from ase.md.velocitydistribution import (MaxwellBoltzmannDistribution,
                                          Stationary, ZeroRotation)
 
-
 from pandas import read_csv
 import numpy as np
 
 from ase.calculators.demonnano import DemonNano
 
+assert len(argv)>4, 'Not all arguments provided'
 # number and size of MD steps from the arguments passed through command line
 n_md = int(argv[1])
 step_md = float(argv[2])  #in fs
 # type of calculator (demonnano or schnet)
 calc_type = str(argv[3])  
+# type of hopping strategy (lz or zn)
+hop_type = str(argv[4])  
 
 # Load Machine Learning model (trained) and make it calculator
 model_dir = '/tmpdir/evgeny/phenant-neural-net/s2-bio-T500-nose/make-model/model_force_10k'
 model2_dir = '/tmpdir/evgeny/phenant-neural-net/s3-bio-T500-nose/make-model/model_force_10k'
+path1 = path.join(model_dir, 'best_model')
+path2 = path.join(model2_dir, 'best_model')
 
-path_s1 = path.join(model_dir, 'best_model')
-path_s2 = path.join(model2_dir, 'best_model')
+do_lz = False
+do_zn = False
+# determine the hopping strategy
+if hop_type=='lz':
+    do_lz = True  
+if hop_type=='zn':
+    do_zn = True
+
+assert do_lz or do_zn, 'Please enter a hopping type: lz or zn'
+do_both = do_lz and do_zn
 
 # flag that indicates on which state the trajectory is running
-init_es = 3
-do_hop = True
-flag_es = init_es
+flag_es = 3
 
+do_hop = True
 hop_every = 1
 
-# Check if a GPU is available and use a CPU otherwise
-#if torch.cuda.is_available():
-#    md_device = "cuda"
-#else:
-#    md_device = "cpu"
-
-#md_model = torch.load(path_s1, map_location=md_device).to(md_device)
-md_device = "cpu"
-
 # SchNet calculator
-model = load_model(path_s1,map_location=torch_device('cpu'))
-model2 = load_model(path_s2,map_location=torch_device('cpu'))
+model = load_model(path1,map_location=torch_device('cpu'))
+model2 = load_model(path2,map_location=torch_device('cpu'))
 
 # demon-nano calculator
 input_arguments = {'DFTB': 'SCC LRESP EXST=2',
@@ -60,10 +61,10 @@ input_arguments2 = {'DFTB': 'SCC LRESP EXST=3',
                    'CHARGE': '0.0',
                    'PARAM': 'PTYPE=BIO'}
 
-if (calc_type=="demonnano")
+if (calc_type=="demonnano"):
     calc = DemonNano(label='rundir/',input_arguments=input_arguments)
     calc2 = DemonNano(label='rundir/',input_arguments=input_arguments2)
-if (calc_type=="schnet")
+if (calc_type=="schnet"):
     calc = SpkCalculator(model, device="cpu", energy="energy", forces="forces")
     calc2 = SpkCalculator(model2, device="cpu", energy="energy", forces="forces")
 
@@ -138,8 +139,8 @@ force_down_t3 = atoms.get_forces()*Bohr/Hartree
 atoms.set_calculator(calc2)
 
 masses = atoms.get_masses()
-# print energies and compute S1/S2 gap
-def printenergy(a=atoms):  # store a reference to atoms in the definition.
+
+def tsh(a=atoms):  # store a reference to atoms in the definition.
 
     global j_md, count, count_interpol
     global flag_es, dt
@@ -253,15 +254,15 @@ def printenergy(a=atoms):  # store a reference to atoms in the definition.
 
         if do_hop and (not hop):
             xi = np.random.rand(1)
-            if xi <= p_lz and xi > p_zn:
+            if xi <= p_lz and xi > p_zn and do_lz:
                 print('Hop according to Landau-Zener at {}'.format(j_md-1))
-                #print('Landau-Zener prob: {}'.format(float(p_lz)))
-                #hop = True
-            elif xi <= p_zn and xi > p_lz:
+                print('Landau-Zener prob: {}'.format(float(p_lz)))
+                hop = True
+            elif xi <= p_zn and xi > p_lz and do_zn:
                 print('Hop according to Zhu-Nakamura at {}'.format(j_md-1))
                 print('Zhu-Nakamura prob: {}'.format(float(p_zn)))
                 hop = True
-            elif xi <= p_zn and xi <= p_lz:
+            elif xi <= p_zn and xi <= p_lz and do_both:
                 print('Hop according to LZ and ZN at {} !'.format(j_md-1))
                 print('LZ and ZN probs: {0} {1}'.format(float(p_lz),float(p_zn)))
                 hop = True
@@ -297,9 +298,8 @@ def printenergy(a=atoms):  # store a reference to atoms in the definition.
     
     j_md += 1
 
-# Now run the dynamics
-
-dyn.attach(printenergy, interval=1)
+# run the molecular dynamics with TSH module
+dyn.attach(tsh, interval=1)
 dyn.run(n_md)
 
 k = 11
@@ -309,7 +309,7 @@ print('Indices of {0} smallest gaps: {1}'.format(k,idx[:k]))
 with np.printoptions(precision=4, suppress=True):
     print('Smallest values:')
     print(gap_12[idx[:k]]*Hartree)
-
 #print(np.argmin(gap_12),np.min(gap_12))
+
 df.close()
 
