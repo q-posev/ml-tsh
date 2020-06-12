@@ -254,11 +254,11 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
 
         if do_hop and (not hop):
             xi = np.random.rand(1)
-            if xi <= p_lz and xi > p_zn and do_lz:
+            if xi <= p_lz and do_lz:
                 print('Hop according to Landau-Zener at {}'.format(j_md-1),flush=True)
                 print('Landau-Zener prob: {}'.format(float(p_lz)),flush=True)
                 hop = True
-            elif xi <= p_zn and xi > p_lz and do_zn:
+            elif xi <= p_zn and do_zn:
                 print('Hop according to Zhu-Nakamura at {}'.format(j_md-1),flush=True)
                 print('Zhu-Nakamura prob: {}'.format(float(p_zn)),flush=True)
                 hop = True
@@ -304,14 +304,14 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
 dyn.attach(tsh, interval=1)
 dyn.run(n_md)
 
+df.close()
+
 k = 11
 idx = np.argpartition(gap_12, k)
-print('Indices of {0} smallest gaps: {1}'.format(k,idx[:k]))
+print('Indices of {0} smallest gaps: {1}'.format(k,idx[:k]),flush=True)
 #This returns the k-smallest values. Note that these may not be in sorted order.
 with np.printoptions(precision=4, suppress=True):
-    print('Smallest values:')
-    print(gap_12[idx[:k]]*Hartree)
+    print('Smallest values:',flush=True)
+    print(gap_12[idx[:k]]*Hartree,flush=True)
 #print(np.argmin(gap_12),np.min(gap_12))
-
-df.close()
 
