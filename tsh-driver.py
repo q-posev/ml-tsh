@@ -199,14 +199,28 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
     if (gap_12[j_md-1] <= gap_12[j_md]) and (gap_12[j_md-2] >= gap_12[j_md-1]) and (j_md>1):
         #print('Possible crossing at {}'.format(j_md))
         
+        dgap = (gap_12[j_md] - 2.0*gap_12[j_md-1] + gap_12[j_md-2])/(dt*dt)
+        #dgap2 = (gap_12[j_md+1] - 2.0*gap_12[j_md] + gap_12[j_md-1])/(dt*dt)
+        c_ij = np.power(gap_12[j_md-1],3)/dgap
+        p_lz = 0.0
+        if(dgap<0.0):
+            print('alert, small d^2/dt^2',dgap)
+        else:
+            p_lz = np.exp(-0.5*np.pi*np.sqrt(c_ij)) 
+
         #force1_x = (force_down_t3*(coordinates-coordinates_t1) - force_up_t1*(coordinates-coordinates_t3))/(coordinates_t3-coordinates_t1)
         #force2_x = (force_up_t3*(coordinates-coordinates_t1) - force_down_t1*(coordinates-coordinates_t3))/(coordinates_t3-coordinates_t1)
         sum_G = force_up_t2+force_down_t2
         dGc = (force_up_t2-force_down_t2) - (force_up_t1-force_down_t1)
         dGc /= dt
         #print(dGc) 
-        
-        factor=gap_12[j_md-1]/(4.0*np.tensordot(dGc,velocities))        
+       
+        dGxVelo = np.tensordot(dGc,velocities)
+        if (dGxVelo < 0.0):
+            print('negative product, use BL')
+            factor=0.5*np.sqrt(gap_12[j_md-1]/dgap)
+        else:
+            factor=0.5*np.sqrt(gap_12[j_md-1]/dGxVelo)
  
         force1_x = 0.5*sum_G - factor*dGc
         force2_x = 0.5*sum_G + factor*dGc
@@ -242,16 +256,6 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
 
         p_zn = np.exp(-np.pi*0.25*np.sqrt(2.0/(a2*root)))
         
-        dgap = (gap_12[j_md] - 2.0*gap_12[j_md-1] + gap_12[j_md-2])/(dt*dt)
-        #dgap2 = (gap_12[j_md+1] - 2.0*gap_12[j_md] + gap_12[j_md-1])/(dt*dt)
-        c_ij = np.power(gap_12[j_md-1],3)/dgap
-        p_lz = 0.0
-        if(dgap<0.0):
-            print('alert, small d^2/dt^2',dgap)
-            #p_lz = np.exp(-0.5*np.pi*np.sqrt(-c_ij)) 
-        else:
-            p_lz = np.exp(-0.5*np.pi*np.sqrt(c_ij)) 
-
         if do_hop and (not hop):
             xi = np.random.rand(1)
             if xi <= p_lz and do_lz:
