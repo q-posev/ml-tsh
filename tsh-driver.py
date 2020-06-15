@@ -162,7 +162,7 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
         force_down_t1 = a.get_forces()*Bohr/Hartree    
         a.set_calculator(calc2)
 
-    if (j_md == (count_interpol+1)):
+    if j_md == (count_interpol+1):
         etot = a.get_total_energy()/Hartree
         ex = a.get_potential_energy()/Hartree
         coordinates = a.get_positions()
@@ -273,8 +273,9 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
 
             betta = gap_12[j_md-1]/ekin
             # check for frustrated hop
-            if betta >= 1.0:
-                print("Frustrated hop",j_md, betta)
+            # condition should be imposed only for upward hops because for hops down betta is always positive 
+            if (hop and betta <= 1.0 and flag_es==2):
+                print("Frustrated hop",j_md-1, betta)
                 hop = False
             
             if hop :
@@ -282,6 +283,9 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
                     flag_es=2
                 else:
                     flag_es=3
+                # comment the line below to enable only 1 downward hop along the trajectory
+                # if uncommented - several hops (also upward ones) are allowed
+                hop = False
                 
                 a.set_positions(coordinates)
 		# velocity rescaling to conserve total energy
