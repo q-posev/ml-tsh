@@ -183,16 +183,18 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
 
     p_zn = 0.0
     p_lz = 0.0
+    small_dgap = False
     if (gap_12[j_md-1] <= gap_12[j_md]) and (gap_12[j_md-2] >= gap_12[j_md-1]) and (j_md>1):
         #print('Possible crossing at {}'.format(j_md))
         
         dgap = (gap_12[j_md] - 2.0*gap_12[j_md-1] + gap_12[j_md-2])/(dt*dt)
         #dgap2 = (gap_12[j_md+1] - 2.0*gap_12[j_md] + gap_12[j_md-1])/(dt*dt)
-        c_ij = np.power(gap_12[j_md-1],3)/dgap
         p_lz = 0.0
-        if(dgap<0.0):
-            print('alert, small d^2/dt^2',dgap)
+        if(dgap<1E-12):
+            print('alert, small or negative d^2/dt^2',dgap)
+            small_dgap = True
         else:
+            c_ij = np.power(gap[j_md-1],3)/dgap
             p_lz = np.exp(-0.5*np.pi*np.sqrt(c_ij)) 
 
         #force1_x = (force_down_t3*(coordinates-coordinates_t1) - force_up_t1*(coordinates-coordinates_t3))/(coordinates_t3-coordinates_t1)
@@ -200,12 +202,18 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
         sum_G = force_up_t2+force_down_t2
         dGc = (force_up_t2-force_down_t2) - (force_up_t1-force_down_t1)
         dGc /= dt
-        #print(dGc) 
        
-        dGxVelo = np.tensordot(dGc,velocities)
+        # dGc*velo has to be in a.u. 
+        tau = 0.02418881
+        conversion_velo = fs/(tau*Bohr)
+        # TODO : MANAGE UNITS OF VELOCITY 
+        dGxVelo = np.tensordot(dGc,velocities*conversion_velo)
         if (dGxVelo < 0.0):
             print('negative product, use BL')
-            factor=0.5*np.sqrt(gap_12[j_md-1]/dgap)
+            if not small_dgap:
+                factor=0.5*np.sqrt(gap_12[j_md-1]/dgap)
+            else:
+                factor = 0.0
         else:
             factor=0.5*np.sqrt(gap_12[j_md-1]/dGxVelo)
  
@@ -241,8 +249,13 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
         else:
             root = b2 + np.sqrt(np.abs(b2*b2 - 1.0))
 
-        p_zn = np.exp(-np.pi*0.25*np.sqrt(2.0/(a2*root)))
-        
+        # compute Zhu-Nakamura probability
+        if not small_dgap:
+            p_zn = np.exp(-np.pi*0.25*np.sqrt(2.0/(a2*root)))
+        else:
+            print('Issue with second derivative of gap in BL')
+            p_zn = 0.0
+
         if do_hop and (not hop):
             xi = np.random.rand(1)
             if xi <= p_lz and do_lz:
@@ -266,17 +279,20 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
                 hop = False
             
             if hop :
+                # comment the line below to enable only 1 downward hop along the trajectory
+                # if uncommented - several hops (also upward ones) are allowed
+                hop = False                
+                a.set_positions(coordinates)
+            	# velocity rescaling to conserve total energy
+                if flag_es==3:
+                    a.set_velocities(np.sqrt(1.0+betta)*velocities)
+                else:
+                    a.set_velocities(np.sqrt(1.0-betta)*velocities)
+                # reset running state according to the hop
                 if flag_es==3:
                     flag_es=2
                 else:
                     flag_es=3
-                # comment the line below to enable only 1 downward hop along the trajectory
-                # if uncommented - several hops (also upward ones) are allowed
-                hop = False
-                
-                a.set_positions(coordinates)
-		# velocity rescaling to conserve total energy
-                a.set_velocities(np.sqrt(1.0+betta)*velocities)
                 # set j_md to j_md-1 because we kind of make a step back in time 
                 j_md -= 1
     

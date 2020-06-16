@@ -95,9 +95,8 @@ velo[:,2]=data.z
 atoms.set_velocities(velo/fs)
 
 # We want to run MD with constant energy using the VelocityVerlet algorithm. 
-#print("MD step: ", step_md)
 dyn = VelocityVerlet(atoms, step_md * fs)	
-#, trajectory='md.traj')#, logfile='md.log')
+#, trajectory='md.traj', logfile='md.log')
 
 # dynamical variables
 gap_mid_down = np.zeros(n_md+1,dtype=np.float64)
@@ -191,20 +190,22 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
         ex = atoms.get_potential_energy()/Hartree
         ekin = atoms.get_kinetic_energy()/Hartree
         etot = ex+ekin
-
+        #print(etot)
         p_zn = 0.0
         p_lz = 0.0
+        small_dgap = False
         # check for the local minimum of the energy gap between 2 states
         if (gap[j_md-1] <= gap[j_md]) and (gap[j_md-2] >= gap[j_md-1]):
             #print('Possible crossing at {}'.format(j_md))
             # Landau-Zener part
             dgap = (gap[j_md] - 2.0*gap[j_md-1] + gap[j_md-2])/(dt*dt)
             #dgap2 = (gap[j_md+1] - 2.0*gap[j_md] + gap[j_md-1])/(dt*dt)
-            c_ij = np.power(gap[j_md-1],3)/dgap
             # compute Landau-Zener probability
-            if(dgap<0.0):
-                print('alert, small d^2/dt^2',dgap)
+            if(dgap<1E-12):
+                print('alert, small or negative d^2/dt^2',dgap)
+                small_dgap = True
             else:
+                c_ij = np.power(gap[j_md-1],3)/dgap
                 p_lz = np.exp(-0.5*np.pi*np.sqrt(c_ij)) 
             # Zhu-Nakamura part
             # compute diabatic gradients according to Yu et al. 2014 (PCCP)
@@ -214,11 +215,17 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
             sum_G = force_upper_t2+force_lower_t2
             dGc = (force_upper_t2-force_lower_t2) - (force_upper_t1-force_lower_t1)
             dGc /= dt
-           
-            dGxVelo = np.tensordot(dGc,velocities)
+            # dGc*velo has to be in a.u. 
+            tau = 0.02418881
+            conversion_velo = fs/(tau*Bohr)
+            # TODO : MANAGE UNITS OF VELOCITY 
+            dGxVelo = np.tensordot(dGc,velocities*conversion_velo)
             if (dGxVelo < 0.0):
                 print('negative product, use BL')
-                factor=0.5*np.sqrt(gap[j_md-1]/dgap)
+                if not small_dgap:
+                    factor=0.5*np.sqrt(gap[j_md-1]/dgap)
+                else:
+                    factor=0.0
             else:
                 factor=0.5*np.sqrt(gap[j_md-1]/dGxVelo)
   
@@ -252,7 +259,11 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
             else:
                 root = b2 + np.sqrt(np.abs(b2*b2 - 1.0)) 
             # compute Zhu-Nakamura probability
-            p_zn = np.exp(-np.pi*0.25*np.sqrt(2.0/(a2*root)))
+            if not small_dgap:
+                p_zn = np.exp(-np.pi*0.25*np.sqrt(2.0/(a2*root)))
+            else:
+                print('Issue with second derivative of gap in BL')
+                p_zn = 0.0
             # comparison with a random number
             if do_hop and (not hop):
                 xi = np.random.rand(1)
@@ -276,11 +287,15 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
                     hop = False
                 if hop :
                     print('Switch from {0} to {1}'.format(flag_es,target_state),flush=True)
-                    flag_es = target_state                   
                     # make one MD step back since local minimum was at t and we are at t+dt 
                     a.set_positions(coordinates)
             	    # velocity rescaling to conserve total energy
-                    a.set_velocities(np.sqrt(1.0+betta)*velocities)
+                    if target_state<flag_es:
+                        a.set_velocities(np.sqrt(1.0+betta)*velocities)
+                    else:
+                        a.set_velocities(np.sqrt(1.0-betta)*velocities)
+                    # change the running state
+                    flag_es = target_state                   
                     # set j_md to j_md-1 because we kind of make a step back in time 
                     j_md -= 1
                     #count_interpol -= 1
