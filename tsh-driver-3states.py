@@ -100,8 +100,8 @@ dyn = VelocityVerlet(atoms, step_md * fs)
 #, trajectory='md.traj')#, logfile='md.log')
 
 # dynamical variables
-gap_mid_down = np.zeros(n_md,dtype=np.float64)
-gap_mid_up = np.zeros(n_md,dtype=np.float64)
+gap_mid_down = np.zeros(n_md+1,dtype=np.float64)
+gap_mid_up = np.zeros(n_md+1,dtype=np.float64)
 
 t_step = np.zeros(n_md,dtype=np.float32)
 t_step = np.arange(0, n_md)
@@ -121,55 +121,51 @@ else:
 
 # seed random number generator for reproducible results
 #np.random.seed(1)
-
 do_hop = True
 hop = False
-
-count_interpol = 0
-
+#count_interpol = 0
 force_up_t1 = atoms.get_forces()*Bohr/Hartree
-force_up_t3 = atoms.get_forces()*Bohr/Hartree
 force_up_t2 = atoms.get_forces()*Bohr/Hartree
+#force_up_t3 = atoms.get_forces()*Bohr/Hartree
 force_mid_t1 = atoms.get_forces()*Bohr/Hartree
-force_mid_t3 = atoms.get_forces()*Bohr/Hartree
 force_mid_t2 = atoms.get_forces()*Bohr/Hartree
+#force_mid_t3 = atoms.get_forces()*Bohr/Hartree
 force_down_t1 = atoms.get_forces()*Bohr/Hartree
 force_down_t2 = atoms.get_forces()*Bohr/Hartree
-force_down_t3 = atoms.get_forces()*Bohr/Hartree
+#force_down_t3 = atoms.get_forces()*Bohr/Hartree
 
-coordinates_t3 = atoms.get_positions()
+#coordinates_t3 = atoms.get_positions()
 coordinates_t1 = atoms.get_positions()
 coordinates = atoms.get_positions()
 velocities = atoms.get_velocities()
 
-etot = atoms.get_total_energy()/Hartree
-ex = atoms.get_potential_energy()/Hartree
+#etot = atoms.get_total_energy()/Hartree
+#ex = atoms.get_potential_energy()/Hartree
 masses = atoms.get_masses()
 
 def tsh(a=atoms):  # store a reference to atoms in the definition.
-    global j_md, count_interpol
-    global flag_es, dt
+    global j_md, flag_es
+    global dt
     global do_hop, hop
     global force_up_t1,coordinates_t1,force_down_t2,force_down_t1
     global force_up_t3,coordinates_t3,force_up_t2,force_down_t3
-    global coordinates,velocities,etot,ex,masses   
+    global coordinates,velocities,masses   
     global force_mid_t1,force_mid_t3,force_mid_t2
     global gaps_mid_down, gaps_mid_up
     """Function to print the potential, kinetic and total energy."""
-    epot = a.get_potential_energy()/Hartree #/ len(a)
-    ekin = a.get_kinetic_energy()/Hartree #/ len(a)
-
-    if j_md == count_interpol:
+    #epot = a.get_potential_energy()/Hartree #/ len(a)
+    #ekin = a.get_kinetic_energy()/Hartree #/ len(a)
+    if j_md%3 == 0:
+        coordinates_t1 = a.get_positions()
         a.set_calculator(calc3)
         force_up_t1 = a.get_forces()*Bohr/Hartree
         a.set_calculator(calc)
         force_down_t1 = a.get_forces()*Bohr/Hartree    
         a.set_calculator(calc2)
         force_mid_t1 = a.get_forces()*Bohr/Hartree    
-        coordinates_t1 = a.get_positions()
-    if j_md == (count_interpol+1):
-        etot = a.get_total_energy()/Hartree
-        ex = a.get_potential_energy()/Hartree
+    if j_md%3 == 1:
+        #etot = a.get_total_energy()/Hartree
+        #ex = a.get_potential_energy()/Hartree
         coordinates = a.get_positions()
         velocities = a.get_velocities()
         a.set_calculator(calc3)
@@ -178,40 +174,39 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
         force_down_t2 = a.get_forces()*Bohr/Hartree    
         a.set_calculator(calc2)
         force_mid_t2 = a.get_forces()*Bohr/Hartree    
-    if j_md == (count_interpol+2):
-        a.set_calculator(calc3)
-        force_up_t3 = a.get_forces()*Bohr/Hartree
-        coordinates_t3 = a.get_positions()
-        a.set_calculator(calc)
-        force_down_t3 = a.get_forces()*Bohr/Hartree
-        a.set_calculator(calc2)
-        force_mid_t3 = a.get_forces()*Bohr/Hartree    
-        count_interpol = count_interpol + 1
-
-    def check_hop(gap,forces_upper_t2,forces_upper_t1,forces_lower_t2,forces_lower_t1,target_state):
-        global dt, j_md
-        global coordinates, velocities
+   #if j_md%3 == 2:
+   #    coordinates_t3 = a.get_positions()
+   #    a.set_calculator(calc3)
+   #    force_up_t3 = a.get_forces()*Bohr/Hartree
+   #    a.set_calculator(calc)
+   #    force_down_t3 = a.get_forces()*Bohr/Hartree
+   #    a.set_calculator(calc2)
+   #    force_mid_t3 = a.get_forces()*Bohr/Hartree    
+   #    #count_interpol = count_interpol + 1
+    def check_hop(atoms,gap,force_upper_t2,force_upper_t1,force_lower_t2,force_lower_t1,target_state):
+        global flag_es, j_md
+        global coordinates, velocities, dt
         global hop, do_hop
-        global etot, ex, ekin
+        #global dt,etot, ex, ekin
+        ex = atoms.get_potential_energy()/Hartree
+        ekin = atoms.get_kinetic_energy()/Hartree
+        etot = ex+ekin
 
         p_zn = 0.0
         p_lz = 0.0
         # check for the local minimum of the energy gap between 2 states
         if (gap[j_md-1] <= gap[j_md]) and (gap[j_md-2] >= gap[j_md-1]):
             #print('Possible crossing at {}'.format(j_md))
-            
             # Landau-Zener part
             dgap = (gap[j_md] - 2.0*gap[j_md-1] + gap[j_md-2])/(dt*dt)
-            #dgap2 = (gap_12[j_md+1] - 2.0*gap_12[j_md] + gap_12[j_md-1])/(dt*dt)
+            #dgap2 = (gap[j_md+1] - 2.0*gap[j_md] + gap[j_md-1])/(dt*dt)
             c_ij = np.power(gap[j_md-1],3)/dgap
             # compute Landau-Zener probability
             if(dgap<0.0):
                 print('alert, small d^2/dt^2',dgap)
             else:
                 p_lz = np.exp(-0.5*np.pi*np.sqrt(c_ij)) 
- 
             # Zhu-Nakamura part
- 
             # compute diabatic gradients according to Yu et al. 2014 (PCCP)
             #force1_x = (force_down_t3*(coordinates-coordinates_t1) - force_up_t1*(coordinates-coordinates_t3))/(coordinates_t3-coordinates_t1)
             #force2_x = (force_up_t3*(coordinates-coordinates_t1) - force_down_t1*(coordinates-coordinates_t3))/(coordinates_t3-coordinates_t1)
@@ -223,13 +218,12 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
             dGxVelo = np.tensordot(dGc,velocities)
             if (dGxVelo < 0.0):
                 print('negative product, use BL')
-                factor=0.5*np.sqrt(gap_12[j_md-1]/dgap)
+                factor=0.5*np.sqrt(gap[j_md-1]/dgap)
             else:
-                factor=0.5*np.sqrt(gap_12[j_md-1]/dGxVelo)
+                factor=0.5*np.sqrt(gap[j_md-1]/dGxVelo)
   
             force1_x = 0.5*sum_G - factor*dGc
-            force2_x = 0.5*sum_G + factor*dGc
-            
+            force2_x = 0.5*sum_G + factor*dGc           
             force_diff_acc = 0.0
             force_prod_acc = 0.0
             for i in range(0,len(a)):
@@ -259,7 +253,6 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
                 root = b2 + np.sqrt(np.abs(b2*b2 - 1.0)) 
             # compute Zhu-Nakamura probability
             p_zn = np.exp(-np.pi*0.25*np.sqrt(2.0/(a2*root)))
-            
             # comparison with a random number
             if do_hop and (not hop):
                 xi = np.random.rand(1)
@@ -279,7 +272,7 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
                 betta = gap[j_md-1]/ekin
                 # check for frustrated hop condition should be imposed only for upward hops because for hops down betta is always positive 
                 if (hop and betta <= 1.0 and target_state>flag_es):
-                    print("Rejected (frustrated) hop",j_md-1, betta,flush=True)
+                    print("Rejected (frustrated) hop at",j_md-1, betta,flush=True)
                     hop = False
                 if hop :
                     print('Switch from {0} to {1}'.format(flag_es,target_state),flush=True)
@@ -290,12 +283,11 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
                     a.set_velocities(np.sqrt(1.0+betta)*velocities)
                     # set j_md to j_md-1 because we kind of make a step back in time 
                     j_md -= 1
-                    count_interpol -= 1
-                    
-            if do_zn:
-                return p_zn
-            else:
-                return p_lz
+                    #count_interpol -= 1
+        if do_zn:
+            return p_zn
+        else:
+            return p_lz
 
     # reset calculators to compute other energies
     a.set_calculator(calc)
@@ -307,17 +299,25 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
 
     gap_mid_up[j_md] = np.abs(epot_up - epot_mid)
     gap_mid_down[j_md] = np.abs(epot_mid - epot_down)
+
+    if flag_es==3:
+        a.set_calculator(calc2)
+    if flag_es==2:
+    	a.set_calculator(calc)
+    if flag_es==4:
+    	a.set_calculator(calc3)
+
+    p_up = 0.0
+    p_down = 0.0
     if j_md > 0:
-        p_up = 0.0
-        p_down = 0.0
         if flag_es==3:
-            p_up = check_hop(gap_mid_up,force_up_t2,force_up_t1,force_mid_t2,force_mid_t1,flag_es+1)
-            p_down = check_hop(gap_mid_down,force_mid_t2,force_mid_t1,force_down_t2,force_down_t1,flag_es-1)
+            p_up = check_hop(a,gap_mid_up,force_up_t2,force_up_t1,force_mid_t2,force_mid_t1,flag_es+1)
+            p_down = check_hop(a,gap_mid_down,force_mid_t2,force_mid_t1,force_down_t2,force_down_t1,flag_es-1)
         elif flag_es==2:
-            p_up = check_hop(gap_mid_down,force_mid_t2,force_mid_t1,force_down_t2,force_down_t1,flag_es+1)
+            p_up = check_hop(a,gap_mid_down,force_mid_t2,force_mid_t1,force_down_t2,force_down_t1,flag_es+1)
         elif flag_es==4:
-            p_down = check_hop(gap_mid_up,force_up_t2,force_up_t1,force_mid_t2,force_mid_t1,flag_es-1)
- 
+            p_down = check_hop(a,gap_mid_up,force_up_t2,force_up_t1,force_mid_t2,force_mid_t1,flag_es-1)
+        #print(p_up,p_down)
     # set SPK model back to running state this already takes into account the switch if performed
     if flag_es==3:
         a.set_calculator(calc2)
@@ -325,11 +325,10 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
     	a.set_calculator(calc)
     if flag_es==4:
     	a.set_calculator(calc3)
-  
     # data output (time,energy gap in eV, up and down hopping probabilities, active state)
     if j_md > 0:
-        df.write('{0:0.2f} {1:0.5f} {2:0.5f} {3} {4} {5}\n'.format(t_step[j_md-1],\
-                gap_mid_down[j_md-1]*Hartree,gap_mid_up[j_md-1]*Hartree,float(p_down),float(p_up),flag_es))
+        df.write('{0:0.2f} {1:0.5f} {2:0.5f} {3:0.5f} {4:0.5f} {5}\n'.format(t_step[j_md-1],\
+                 gap_mid_down[j_md-1]*Hartree,gap_mid_up[j_md-1]*Hartree,float(p_down),float(p_up),flag_es))
         df.flush()
         fsync(df)
         # comment the line below to enable only one hop along the trajectory if not - several hops (also upward) are allowed
@@ -342,7 +341,6 @@ dyn.attach(tsh, interval=1)
 dyn.run(n_md)
 
 df.close()
-
 #k = 10
 #idx = np.argpartition(gap_12, k)
 #print('Indices of {0} smallest gaps: {1}'.format(k,idx[:k]),flush=True)
