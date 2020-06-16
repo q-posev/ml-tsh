@@ -116,8 +116,6 @@ else:
 
 do_hop = True
 hop = False
-count = 0
-count_interpol = 0
 
 force_up_t1 = atoms.get_forces()*Bohr/Hartree
 force_up_t3 = atoms.get_forces()*Bohr/Hartree
@@ -141,28 +139,22 @@ atoms.set_calculator(calc2)
 masses = atoms.get_masses()
 
 def tsh(a=atoms):  # store a reference to atoms in the definition.
-
-    global j_md, count, count_interpol
+    global j_md
     global flag_es, dt
     global do_hop, hop
     global force_up_t1,coordinates_t1,force_down_t2,force_down_t1
     global force_up_t3,coordinates_t3,force_up_t2,force_down_t3
     global coordinates,velocities,etot,ex,masses   
-
-    betta=0.0
- 
     """Function to print the potential, kinetic and total energy."""
     epot = a.get_potential_energy()/Hartree #/ len(a)
     ekin = a.get_kinetic_energy()/Hartree #/ len(a)
-
-    if j_md == count_interpol:
+    if j_md%3==0:
         force_up_t1 = a.get_forces()*Bohr/Hartree
         coordinates_t1 = a.get_positions()
         a.set_calculator(calc)
         force_down_t1 = a.get_forces()*Bohr/Hartree    
         a.set_calculator(calc2)
-
-    if j_md == (count_interpol+1):
+    if j_md%3==1:
         etot = a.get_total_energy()/Hartree
         ex = a.get_potential_energy()/Hartree
         coordinates = a.get_positions()
@@ -171,17 +163,12 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
         a.set_calculator(calc)
         force_down_t2 = a.get_forces()*Bohr/Hartree    
         a.set_calculator(calc2)
-
-    #print('Total energy diff: {}'.format(etot - (epot+ekin)))
-
-    if j_md == (count_interpol+2):
+    if j_md%3==2:
         force_up_t3 = a.get_forces()*Bohr/Hartree
         coordinates_t3 = a.get_positions()
         a.set_calculator(calc)
         force_down_t3 = a.get_forces()*Bohr/Hartree
         a.set_calculator(calc2)
-        #print(count_interpol)
-        count_interpol = count_interpol + 1
 
     if flag_es==3:
         a.set_calculator(calc)
@@ -292,7 +279,6 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
                 a.set_velocities(np.sqrt(1.0+betta)*velocities)
                 # set j_md to j_md-1 because we kind of make a step back in time 
                 j_md -= 1
-                count_interpol -= 1
     
     # set SPK model back to running state 
     # this already takes into account the switch if performed
