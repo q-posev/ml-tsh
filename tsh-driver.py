@@ -148,6 +148,11 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
     """Function to print the potential, kinetic and total energy."""
     epot = a.get_potential_energy()/Hartree #/ len(a)
     ekin = a.get_kinetic_energy()/Hartree #/ len(a)
+    # ===============================!!!WARNING!!!============================================================ #
+    # THESE CONDITIONS BELOW HAS TO BE REWRITTEN, THEY DO NOT WORK
+    # CAUSE WHAT HAPPENS IS THAT t1 BECOMES t1+2*n*dt and then it is actually the next step and not previous
+    # implement something with overwriting the the values from t1 with values from current step at the end of this func
+    # ===============================!!!WARNING!!!============================================================ #
     if j_md%3==0:
         force_up_t1 = a.get_forces()*Bohr/Hartree
         coordinates_t1 = a.get_positions()
@@ -194,7 +199,7 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
             print('alert, small or negative d^2/dt^2',dgap)
             small_dgap = True
         else:
-            c_ij = np.power(gap[j_md-1],3)/dgap
+            c_ij = np.power(gap_12[j_md-1],3)/dgap
             p_lz = np.exp(-0.5*np.pi*np.sqrt(c_ij)) 
 
         #force1_x = (force_down_t3*(coordinates-coordinates_t1) - force_up_t1*(coordinates-coordinates_t3))/(coordinates_t3-coordinates_t1)

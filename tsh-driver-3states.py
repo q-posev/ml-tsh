@@ -134,7 +134,7 @@ force_down_t2 = atoms.get_forces()*Bohr/Hartree
 #force_down_t3 = atoms.get_forces()*Bohr/Hartree
 
 #coordinates_t3 = atoms.get_positions()
-coordinates_t1 = atoms.get_positions()
+#coordinates_t1 = atoms.get_positions()
 coordinates = atoms.get_positions()
 velocities = atoms.get_velocities()
 
@@ -146,15 +146,19 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
     global j_md, flag_es
     global dt
     global do_hop, hop
-    global force_up_t1,coordinates_t1,force_down_t2,force_down_t1
-    global force_up_t3,coordinates_t3,force_up_t2,force_down_t3
+    global force_up_t1,force_down_t2,force_down_t1,force_up_t2,force_mid_t1,force_mid_t2
     global coordinates,velocities,masses   
-    global force_mid_t1,force_mid_t3,force_mid_t2
     global gaps_mid_down, gaps_mid_up
     """Function to print the potential, kinetic and total energy."""
     #epot = a.get_potential_energy()/Hartree #/ len(a)
     #ekin = a.get_kinetic_energy()/Hartree #/ len(a)
-    if j_md%3 == 0:
+
+    # ===============================!!!WARNING!!!============================================================ #
+    # THESE CONDITIONS BELOW HAS TO BE REWRITTEN, THEY DO NOT WORK
+    # CAUSE WHAT HAPPENS IS THAT t1 BECOMES t1+2*n*dt and then it is actually the next step and not previous
+    # implement something with overwriting the the values from t1 with values from current step at the end of this func
+    # ===============================!!!WARNING!!!============================================================ #
+    if j_md%2 == 0:
         coordinates_t1 = a.get_positions()
         a.set_calculator(calc3)
         force_up_t1 = a.get_forces()*Bohr/Hartree
@@ -162,7 +166,7 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
         force_down_t1 = a.get_forces()*Bohr/Hartree    
         a.set_calculator(calc2)
         force_mid_t1 = a.get_forces()*Bohr/Hartree    
-    if j_md%3 == 1:
+    if j_md%2 == 1:
         #etot = a.get_total_energy()/Hartree
         #ex = a.get_potential_energy()/Hartree
         coordinates = a.get_positions()
@@ -173,15 +177,7 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
         force_down_t2 = a.get_forces()*Bohr/Hartree    
         a.set_calculator(calc2)
         force_mid_t2 = a.get_forces()*Bohr/Hartree    
-   #if j_md%3 == 2:
-   #    coordinates_t3 = a.get_positions()
-   #    a.set_calculator(calc3)
-   #    force_up_t3 = a.get_forces()*Bohr/Hartree
-   #    a.set_calculator(calc)
-   #    force_down_t3 = a.get_forces()*Bohr/Hartree
-   #    a.set_calculator(calc2)
-   #    force_mid_t3 = a.get_forces()*Bohr/Hartree    
-   #    #count_interpol = count_interpol + 1
+
     def check_hop(atoms,gap,force_upper_t2,force_upper_t1,force_lower_t2,force_lower_t1,target_state):
         global flag_es, j_md
         global coordinates, velocities, dt
@@ -324,7 +320,7 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
 
     p_up = 0.0
     p_down = 0.0
-    if j_md > 0:
+    if j_md > 1:
         if flag_es==3:
             p_up = check_hop(a,gap_mid_up,force_up_t2,force_up_t1,force_mid_t2,force_mid_t1,flag_es+1)
             p_down = check_hop(a,gap_mid_down,force_mid_t2,force_mid_t1,force_down_t2,force_down_t1,flag_es-1)
