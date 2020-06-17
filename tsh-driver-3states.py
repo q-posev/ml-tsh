@@ -47,14 +47,18 @@ do_both = do_lz and do_zn
 
 # flag that indicates on which state the trajectory is running
 flag_es = 3
-
+# flag to switch between 2-state and 3-state model 
+do_3state = True
+# flags for hopping
 do_hop = True
+hop = False
 skip_next = False
 
 # SchNet calculator
 model = load_model(path1,map_location=torch_device('cpu'))
 model2 = load_model(path2,map_location=torch_device('cpu'))
-model3 = load_model(path3,map_location=torch_device('cpu'))
+if do_3state:
+    model3 = load_model(path3,map_location=torch_device('cpu'))
 
 # demon-nano calculator
 input_arguments = {'DFTB': 'SCC LRESP EXST=2',
@@ -70,31 +74,29 @@ input_arguments3 = {'DFTB': 'SCC LRESP EXST=4',
 if (calc_type=="demonnano"):
     calc = DemonNano(label='rundir/',input_arguments=input_arguments)
     calc2 = DemonNano(label='rundir/',input_arguments=input_arguments2)
-    calc3 = DemonNano(label='rundir/',input_arguments=input_arguments3)
+    if do_3state:
+        calc3 = DemonNano(label='rundir/',input_arguments=input_arguments3)
 if (calc_type=="schnet"):
     calc = SpkCalculator(model, device="cpu", energy="energy", forces="forces")
     calc2 = SpkCalculator(model2, device="cpu", energy="energy", forces="forces")
-    calc3 = SpkCalculator(model3, device="cpu", energy="energy", forces="forces")
-
+    if do_3state:
+        calc3 = SpkCalculator(model3, device="cpu", energy="energy", forces="forces")
 
 # read geometry from file and set calculator
 atoms=read('geom-phen.xyz')
-
 # Set the momenta corresponding to T=300K
 MaxwellBoltzmannDistribution(atoms, 300 *kB)
 #Stationary(atoms)  # zero linear momentum
 #ZeroRotation(atoms)  # zero angular momentum
-
+# read velocities from velo file
 velo = atoms.get_velocities()
 data = read_csv('velo', delimiter='\s+', header=None, index_col=False)
 data.columns = ["atom", "x", "y", "z"]
 velo[:,0]=data.x
 velo[:,1]=data.y
 velo[:,2]=data.z
-
 atoms.set_velocities(velo/fs)
-
-# We want to run MD with constant energy using the VelocityVerlet algorithm. 
+# we want to run MD with constant energy using the VelocityVerlet algorithm. 
 dyn = VelocityVerlet(atoms, step_md * fs)	
 #, trajectory='md.traj', logfile='md.log')
 
@@ -118,8 +120,6 @@ else:
     print("Are you sure?")
 # seed random number generator for reproducible results
 #np.random.seed(1)
-do_hop = True
-hop = False
 force_up_t1 = atoms.get_forces()*Bohr/Hartree
 force_up_t2 = atoms.get_forces()*Bohr/Hartree
 force_mid_t1 = atoms.get_forces()*Bohr/Hartree
@@ -143,8 +143,9 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
     if j_md == 0:
         coordinates_t1 = a.get_positions()
         velocities_t1 = a.get_velocities()
-        a.set_calculator(calc3)
-        force_up_t1 = a.get_forces()*Bohr/Hartree
+        if do_3state:
+            a.set_calculator(calc3)
+            force_up_t1 = a.get_forces()*Bohr/Hartree
         a.set_calculator(calc)
         force_down_t1 = a.get_forces()*Bohr/Hartree    
         a.set_calculator(calc2)
@@ -152,8 +153,9 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
     if j_md > 0:
         coordinates = a.get_positions()
         velocities = a.get_velocities()
-        a.set_calculator(calc3)
-        force_up_t2 = a.get_forces()*Bohr/Hartree
+        if do_3state:
+            a.set_calculator(calc3)
+            force_up_t2 = a.get_forces()*Bohr/Hartree
         a.set_calculator(calc)
         force_down_t2 = a.get_forces()*Bohr/Hartree    
         a.set_calculator(calc2)
@@ -287,28 +289,30 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
         epot_down = a.get_potential_energy()/Hartree    
         a.set_calculator(calc2)
         epot_mid = a.get_potential_energy()/Hartree    
-        a.set_calculator(calc3)
-        epot_up = a.get_potential_energy()/Hartree    
+        if do_3state:
+            a.set_calculator(calc3)
+            epot_up = a.get_potential_energy()/Hartree    
+            gap_mid_up[j_md] = np.abs(epot_up - epot_mid)
 
-        gap_mid_up[j_md] = np.abs(epot_up - epot_mid)
         gap_mid_down[j_md] = np.abs(epot_mid - epot_down)
 
     if flag_es==3:
         a.set_calculator(calc2)
     elif flag_es==2:
     	a.set_calculator(calc)
-    elif flag_es==4:
+    elif flag_es==4 and do_3state:
     	a.set_calculator(calc3)
 
     p_up = 0.0
     p_down = 0.0
     if j_md > 1 and not skip_next:
         if flag_es==3:
-            p_up   = check_hop(a,ekin,epot,gap_mid_up,force_up_t2,force_up_t1,force_mid_t2,force_mid_t1,flag_es+1)
+            if do_3state:
+                p_up = check_hop(a,ekin,epot,gap_mid_up,force_up_t2,force_up_t1,force_mid_t2,force_mid_t1,flag_es+1)
             p_down = check_hop(a,ekin,epot,gap_mid_down,force_mid_t2,force_mid_t1,force_down_t2,force_down_t1,flag_es-1)
         elif flag_es==2:
             p_up   = check_hop(a,ekin,epot,gap_mid_down,force_mid_t2,force_mid_t1,force_down_t2,force_down_t1,flag_es+1)
-        elif flag_es==4:
+        elif flag_es==4 and do_3state:
             p_down = check_hop(a,ekin,epot,gap_mid_up,force_up_t2,force_up_t1,force_mid_t2,force_mid_t1,flag_es-1)
         #print(p_up,p_down)
     # set SPK model back to running state this already takes into account the switch if performed
@@ -316,7 +320,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
         a.set_calculator(calc2)
     elif flag_es==2:
     	a.set_calculator(calc)
-    elif flag_es==4:
+    elif flag_es==4 and do_3state:
     	a.set_calculator(calc3)
     # data output (time,energy gap in eV, up and down hopping probabilities, active state)
     if j_md > 0 and not skip_next:
