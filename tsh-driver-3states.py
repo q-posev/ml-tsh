@@ -49,7 +49,7 @@ do_both = do_lz and do_zn
 flag_es = 3
 
 do_hop = True
-hop_every = 1
+skip_next = False
 
 # SchNet calculator
 model = load_model(path1,map_location=torch_device('cpu'))
@@ -107,7 +107,6 @@ t_step = np.arange(0, n_md)
 t_step = t_step*step_md
 
 j_md=0
-
 tau_0 = 0.02418881
 dt = step_md/tau_0
 
@@ -117,58 +116,40 @@ if flag_es==3:
     atoms.set_calculator(calc2)
 else:
     print("Are you sure?")
-
 # seed random number generator for reproducible results
 #np.random.seed(1)
 do_hop = True
 hop = False
-#count_interpol = 0
 force_up_t1 = atoms.get_forces()*Bohr/Hartree
 force_up_t2 = atoms.get_forces()*Bohr/Hartree
-#force_up_t3 = atoms.get_forces()*Bohr/Hartree
 force_mid_t1 = atoms.get_forces()*Bohr/Hartree
 force_mid_t2 = atoms.get_forces()*Bohr/Hartree
-#force_mid_t3 = atoms.get_forces()*Bohr/Hartree
 force_down_t1 = atoms.get_forces()*Bohr/Hartree
 force_down_t2 = atoms.get_forces()*Bohr/Hartree
-#force_down_t3 = atoms.get_forces()*Bohr/Hartree
 
-#coordinates_t3 = atoms.get_positions()
-#coordinates_t1 = atoms.get_positions()
 coordinates = atoms.get_positions()
 velocities = atoms.get_velocities()
-
-#etot = atoms.get_total_energy()/Hartree
-#ex = atoms.get_potential_energy()/Hartree
 masses = atoms.get_masses()
 
-def tsh(a=atoms):  # store a reference to atoms in the definition.
+ekin = 666.0
+epot = 666.0
+def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
     global j_md, flag_es
-    global dt
-    global do_hop, hop
+    global do_hop, hop, skip_next
     global force_up_t1,force_down_t2,force_down_t1,force_up_t2,force_mid_t1,force_mid_t2
-    global coordinates,velocities,masses   
-    global gaps_mid_down, gaps_mid_up
-    """Function to print the potential, kinetic and total energy."""
-    #epot = a.get_potential_energy()/Hartree #/ len(a)
-    #ekin = a.get_kinetic_energy()/Hartree #/ len(a)
-
-    # ===============================!!!WARNING!!!============================================================ #
-    # THESE CONDITIONS BELOW HAS TO BE REWRITTEN, THEY DO NOT WORK
-    # CAUSE WHAT HAPPENS IS THAT t1 BECOMES t1+2*n*dt and then it is actually the next step and not previous
-    # implement something with overwriting the the values from t1 with values from current step at the end of this func
-    # ===============================!!!WARNING!!!============================================================ #
-    if j_md%2 == 0:
+    global coordinates_t1,coordinates,velocities,velocities_t1,masses   
+    global ekin,epot,gaps_mid_down, gaps_mid_up
+    """TSH driver for 3-state model."""
+    if j_md == 0:
         coordinates_t1 = a.get_positions()
+        velocities_t1 = a.get_velocities()
         a.set_calculator(calc3)
         force_up_t1 = a.get_forces()*Bohr/Hartree
         a.set_calculator(calc)
         force_down_t1 = a.get_forces()*Bohr/Hartree    
         a.set_calculator(calc2)
         force_mid_t1 = a.get_forces()*Bohr/Hartree    
-    if j_md%2 == 1:
-        #etot = a.get_total_energy()/Hartree
-        #ex = a.get_potential_energy()/Hartree
+    if j_md > 0:
         coordinates = a.get_positions()
         velocities = a.get_velocities()
         a.set_calculator(calc3)
@@ -177,15 +158,15 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
         force_down_t2 = a.get_forces()*Bohr/Hartree    
         a.set_calculator(calc2)
         force_mid_t2 = a.get_forces()*Bohr/Hartree    
-
-    def check_hop(atoms,gap,force_upper_t2,force_upper_t1,force_lower_t2,force_lower_t1,target_state):
+    #print("STEP {}".format(j_md))
+    #print(force_up_t2)
+    #print(force_mid_t2)
+    def check_hop(atoms,energy_kin,energy_pot,gap,force_upper_t2,force_upper_t1,force_lower_t2,force_lower_t1,target_state):
         global flag_es, j_md
-        global coordinates, velocities, dt
-        global hop, do_hop
-        #global dt,etot, ex, ekin
-        ex = atoms.get_potential_energy()/Hartree
-        ekin = atoms.get_kinetic_energy()/Hartree
-        etot = ex+ekin
+        global coordinates_t1, velocities_t1, dt
+        global hop, do_hop, skip_next
+
+        etot = energy_pot + energy_kin
         #print(etot)
         p_zn = 0.0
         p_lz = 0.0
@@ -215,7 +196,7 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
             tau = 0.02418881
             conversion_velo = fs/(tau*Bohr)
             # TODO : MANAGE UNITS OF VELOCITY 
-            dGxVelo = np.tensordot(dGc,velocities*conversion_velo)
+            dGxVelo = np.tensordot(dGc,velocities_t1*conversion_velo)
             if (dGxVelo < 0.0):
                 print('negative product, use BL')
                 if not small_dgap:
@@ -246,7 +227,7 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
             force_prod = np.sqrt(np.abs(force_prod_acc))
      
             a2 = 0.5*force_diff*force_prod/(np.power(2.0*gap[j_md-1],3))
-            b2 = (etot-ex)*force_diff/(force_prod*2.0*gap[j_md-1])
+            b2 = energy_kin*force_diff/(force_prod*2.0*gap[j_md-1])
             if (a2<0.0) or (b2<0.0) :
                 print('Alert!')
             root = 0.0
@@ -276,7 +257,7 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
                     print('LZ and ZN probs: {0} {1}'.format(float(p_lz),float(p_zn)),flush=True)
                     hop = True
 
-                betta = gap[j_md-1]/ekin
+                betta = gap[j_md-1]/energy_kin
                 # check for frustrated hop condition should be imposed only for upward hops because for hops down betta is always positive 
                 if (hop and betta <= 1.0 and target_state>flag_es):
                     print("Rejected (frustrated) hop at",j_md-1, betta,flush=True)
@@ -284,66 +265,77 @@ def tsh(a=atoms):  # store a reference to atoms in the definition.
                 if hop :
                     print('Switch from {0} to {1}'.format(flag_es,target_state),flush=True)
                     # make one MD step back since local minimum was at t and we are at t+dt 
-                    a.set_positions(coordinates)
+                    a.set_positions(coordinates_t1)
             	    # velocity rescaling to conserve total energy
                     if target_state<flag_es:
-                        a.set_velocities(np.sqrt(1.0+betta)*velocities)
+                        a.set_velocities(np.sqrt(1.0+betta)*velocities_t1)
                     else:
-                        a.set_velocities(np.sqrt(1.0-betta)*velocities)
+                        a.set_velocities(np.sqrt(1.0-betta)*velocities_t1)
                     # change the running state
                     flag_es = target_state                   
                     # set j_md to j_md-1 because we kind of make a step back in time 
                     j_md -= 1
-                    #count_interpol -= 1
+                    skip_next = True
         if do_zn:
             return p_zn
         else:
             return p_lz
 
-    # reset calculators to compute other energies
-    a.set_calculator(calc)
-    epot_down = a.get_potential_energy()/Hartree    
-    a.set_calculator(calc2)
-    epot_mid = a.get_potential_energy()/Hartree    
-    a.set_calculator(calc3)
-    epot_up = a.get_potential_energy()/Hartree    
+    # reset calculators to compute other energies   
+    if not skip_next:
+        a.set_calculator(calc)
+        epot_down = a.get_potential_energy()/Hartree    
+        a.set_calculator(calc2)
+        epot_mid = a.get_potential_energy()/Hartree    
+        a.set_calculator(calc3)
+        epot_up = a.get_potential_energy()/Hartree    
 
-    gap_mid_up[j_md] = np.abs(epot_up - epot_mid)
-    gap_mid_down[j_md] = np.abs(epot_mid - epot_down)
+        gap_mid_up[j_md] = np.abs(epot_up - epot_mid)
+        gap_mid_down[j_md] = np.abs(epot_mid - epot_down)
 
     if flag_es==3:
         a.set_calculator(calc2)
-    if flag_es==2:
+    elif flag_es==2:
     	a.set_calculator(calc)
-    if flag_es==4:
+    elif flag_es==4:
     	a.set_calculator(calc3)
 
     p_up = 0.0
     p_down = 0.0
-    if j_md > 1:
+    if j_md > 1 and not skip_next:
         if flag_es==3:
-            p_up = check_hop(a,gap_mid_up,force_up_t2,force_up_t1,force_mid_t2,force_mid_t1,flag_es+1)
-            p_down = check_hop(a,gap_mid_down,force_mid_t2,force_mid_t1,force_down_t2,force_down_t1,flag_es-1)
+            p_up   = check_hop(a,ekin,epot,gap_mid_up,force_up_t2,force_up_t1,force_mid_t2,force_mid_t1,flag_es+1)
+            p_down = check_hop(a,ekin,epot,gap_mid_down,force_mid_t2,force_mid_t1,force_down_t2,force_down_t1,flag_es-1)
         elif flag_es==2:
-            p_up = check_hop(a,gap_mid_down,force_mid_t2,force_mid_t1,force_down_t2,force_down_t1,flag_es+1)
+            p_up   = check_hop(a,ekin,epot,gap_mid_down,force_mid_t2,force_mid_t1,force_down_t2,force_down_t1,flag_es+1)
         elif flag_es==4:
-            p_down = check_hop(a,gap_mid_up,force_up_t2,force_up_t1,force_mid_t2,force_mid_t1,flag_es-1)
+            p_down = check_hop(a,ekin,epot,gap_mid_up,force_up_t2,force_up_t1,force_mid_t2,force_mid_t1,flag_es-1)
         #print(p_up,p_down)
     # set SPK model back to running state this already takes into account the switch if performed
     if flag_es==3:
         a.set_calculator(calc2)
-    if flag_es==2:
+    elif flag_es==2:
     	a.set_calculator(calc)
-    if flag_es==4:
+    elif flag_es==4:
     	a.set_calculator(calc3)
     # data output (time,energy gap in eV, up and down hopping probabilities, active state)
-    if j_md > 0:
+    if j_md > 0 and not skip_next:
         df.write('{0:0.2f} {1:0.5f} {2:0.5f} {3:0.5f} {4:0.5f} {5}\n'.format(t_step[j_md-1],\
                  gap_mid_down[j_md-1]*Hartree,gap_mid_up[j_md-1]*Hartree,float(p_down),float(p_up),flag_es))
         df.flush()
         fsync(df)
         # comment the line below to enable only one hop along the trajectory if not - several hops (also upward) are allowed
         hop = False
+
+    ekin = a.get_kinetic_energy()/Hartree
+    epot = a.get_potential_energy()/Hartree 
+    velocities_t1 = velocities
+    coordinates_t1 = coordinates
+    force_up_t1 = force_up_t2
+    force_down_t1 = force_down_t2
+    force_mid_t1 = force_down_t2
+    if skip_next:
+        skip_next = False
     
     j_md += 1
 
