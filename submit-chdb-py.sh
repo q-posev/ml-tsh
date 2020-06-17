@@ -21,7 +21,9 @@ mkdir -p $TMP_DEMON
 # provide "add" keyword as a first argument if more trajectories have to be submitted
 # provide shift value in indexing, e.g. if add 100 => use initian conditions starting from init_101
 key="$1"
-
+if [ "$key" == "add" ]; then
+  echo Adding $2 trajectories
+fi
 # create subdirectories for trajectories and copy initial conditions together with tsh-driver.py script
 for i in $(seq $(($SLURM_NTASKS-1)) )
 do
