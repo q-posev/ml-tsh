@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -J tsh-drive
+#SBATCH -J tshNstat
 ##ntasks has to be njobs+1 for one master process
 #SBATCH --ntasks=108
 #SBATCH --nodes=3
@@ -50,7 +50,7 @@ export OMP_PROC_BIND=true
 srun $(placement) chdb \
 --in-dir $TMP_DEMON \
 --in-type xyz \
---command 'cd %dirname% ; sleep $CHDB_RANK; python tsh-driver.py 4000 0.25 schnet zn >> logfile' \
+--command 'cd %dirname% ; sleep $CHDB_RANK; python tsh-driver.py 4000 0.25 schnet zn 3state >> logfile' \
 --verbose \
 --on-error errors.txt
 
