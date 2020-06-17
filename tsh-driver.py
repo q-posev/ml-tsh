@@ -1,5 +1,5 @@
 from os import path, fsync
-from sys import argv
+from sys import argv,exit
 
 from schnetpack.interfaces import SpkCalculator
 from schnetpack.utils import load_model
@@ -53,7 +53,7 @@ if model_type=='2state':
 elif model_type=='3state':
     do_3state = True
 else:
-    print('Provide a model type (2state or 3state) as an argument')
+    print('Provide a model type (2state or 3state) as an argument',flush=True)
 
 # flag that indicates on which state the trajectory is running
 flag_es = 3
@@ -125,7 +125,7 @@ df = open("gaps.txt","w+")
 if flag_es==3:
     atoms.set_calculator(calc2)
 else:
-    print("Are you sure?")
+    print("Are you sure?",flush=True)
 # seed random number generator for reproducible results
 #np.random.seed(1)
 force_up_t1 = atoms.get_forces()*Bohr/Hartree
@@ -174,7 +174,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
     def check_hop(atoms,energy_kin,energy_pot,gap,force_upper_t2,force_upper_t1,force_lower_t2,force_lower_t1,target_state):
         global flag_es, j_md
         global coordinates_t1, velocities_t1, dt
-        global hop, do_hop, skip_next
+        global hop, do_hop
 
         etot = energy_pot + energy_kin
         #print(etot)
@@ -189,7 +189,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
             #dgap2 = (gap[j_md+1] - 2.0*gap[j_md] + gap[j_md-1])/(dt*dt)
             # compute Landau-Zener probability
             if(dgap<1E-12):
-                print('alert, small or negative d^2/dt^2',dgap)
+                print('alert, small or negative d^2/dt^2',dgap,flush=True)
                 small_dgap = True
             else:
                 c_ij = np.power(gap[j_md-1],3)/dgap
@@ -208,7 +208,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
             # TODO : MANAGE UNITS OF VELOCITY 
             dGxVelo = np.tensordot(dGc,velocities_t1*conversion_velo)
             if (dGxVelo < 0.0):
-                print('negative product, use BL')
+                print('negative product, use BL',flush=True)
                 if not small_dgap:
                     factor=0.5*np.sqrt(gap[j_md-1]/dgap)
                 else:
@@ -239,7 +239,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
             a2 = 0.5*force_diff*force_prod/(np.power(2.0*gap[j_md-1],3))
             b2 = energy_kin*force_diff/(force_prod*2.0*gap[j_md-1])
             if (a2<0.0) or (b2<0.0) :
-                print('Alert!')
+                print('Alert!',flush=True)
             root = 0.0
             if do_plus:
                 root = b2 + np.sqrt(b2*b2 + 1.0)
@@ -249,7 +249,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
             if not small_dgap:
                 p_zn = np.exp(-np.pi*0.25*np.sqrt(2.0/(a2*root)))
             else:
-                print('Issue with second derivative of gap in BL')
+                print('Issue with second derivative of gap in BL',flush=True)
                 p_zn = 0.0
             # comparison with a random number
             if do_hop and (not hop):
@@ -283,9 +283,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
                         a.set_velocities(np.sqrt(1.0-betta)*velocities_t1)
                     # change the running state
                     flag_es = target_state                   
-                    # set j_md to j_md-1 because we kind of make a step back in time 
-                    j_md -= 1
-                    skip_next = True
+
         if do_zn:
             return p_zn
         else:
@@ -337,7 +335,6 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
         df.flush()
         fsync(df)
         # comment the line below to enable only one hop along the trajectory if not - several hops (also upward) are allowed
-        hop = False
 
     ekin = a.get_kinetic_energy()/Hartree
     epot = a.get_potential_energy()/Hartree 
@@ -348,6 +345,11 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
     force_mid_t1 = force_down_t2
     if skip_next:
         skip_next = False
+    if hop:
+        # decrement j_md because we kind of make a step back in time and skip next step
+        j_md -= 1
+        skip_next = True
+        hop = False
     
     j_md += 1
 
@@ -356,12 +358,6 @@ dyn.attach(tsh, interval=1)
 dyn.run(n_md)
 
 df.close()
-#k = 10
-#idx = np.argpartition(gap_12, k)
-#print('Indices of {0} smallest gaps: {1}'.format(k,idx[:k]),flush=True)
-	#This returns the k-smallest values. Note that these may not be in sorted order.
-#with np.printoptions(precision=4, suppress=True):
-#    print('Smallest values:',flush=True)
-#    print(gap_12[idx[:k]]*Hartree,flush=True)
-#print(np.argmin(gap_12),np.min(gap_12))
+print('finished',flush=True)
+exit()
 
