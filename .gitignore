@@ -1,3 +1,5 @@
 */
 slurm-*
+submit-chdb-py-dftb.sh
+submit-oly-single.sh
 
