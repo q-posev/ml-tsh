@@ -269,7 +269,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
 
                 betta = gap[j_md-1]/energy_kin
                 # check for frustrated hop condition should be imposed only for upward hops because for hops down betta is always positive 
-                if (hop and betta <= 1.0 and target_state>flag_es):
+                if (hop and betta > 1.0 and target_state>flag_es):
                     print("Rejected (frustrated) hop at",j_md-1, betta,flush=True)
                     hop = False
                 if hop :
