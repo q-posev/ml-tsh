@@ -52,8 +52,8 @@ if model_type=='2state':
     do_3state = False
 elif model_type=='3state':
     do_3state = True
-elif:
-    print('Provide a model type (2state or 3state) as an argument'
+else:
+    print('Provide a model type (2state or 3state) as an argument')
 
 # flag that indicates on which state the trajectory is running
 flag_es = 3
