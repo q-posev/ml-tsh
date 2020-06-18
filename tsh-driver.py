@@ -1,9 +1,9 @@
 from os import path, fsync
-from sys import argv,exit
+from sys import argv
+import subprocess
 
 from schnetpack.interfaces import SpkCalculator
 from schnetpack.utils import load_model
-
 from torch import device as torch_device
 
 from ase.units import Hartree,Bohr,fs,kB
@@ -11,11 +11,17 @@ from ase.io import read
 from ase.md.verlet import VelocityVerlet
 from ase.md.velocitydistribution import (MaxwellBoltzmannDistribution,
                                          Stationary, ZeroRotation)
+from ase.calculators.demonnano import DemonNano
 
 from pandas import read_csv
 import numpy as np
 
-from ase.calculators.demonnano import DemonNano
+def get_git_revision_hash():
+    return subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()
+def get_git_revision_short_hash():
+    return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).strip()
+print('Last git commit: {}'.format(get_git_revision_hash()))
+print('Shorter hash: {}'.format(get_git_revision_short_hash()))
 
 assert len(argv)>4, 'Not all arguments provided'
 # number and size of MD steps from the arguments passed through command line
@@ -54,7 +60,6 @@ elif model_type=='3state':
     do_3state = True
 else:
     print('Provide a model type (2state or 3state) as an argument',flush=True)
-
 # flag that indicates on which state the trajectory is running
 flag_es = 3
 # flags for hopping
@@ -67,7 +72,6 @@ model = load_model(path1,map_location=torch_device('cpu'))
 model2 = load_model(path2,map_location=torch_device('cpu'))
 if do_3state:
     model3 = load_model(path3,map_location=torch_device('cpu'))
-
 # demon-nano calculator
 input_arguments = {'DFTB': 'SCC LRESP EXST=2',
                    'CHARGE': '0.0',
@@ -78,7 +82,7 @@ input_arguments2 = {'DFTB': 'SCC LRESP EXST=3',
 input_arguments3 = {'DFTB': 'SCC LRESP EXST=4',
                    'CHARGE': '0.0',
                    'PARAM': 'PTYPE=BIO'}
-
+# define calculators for 2- or 3-state model
 if (calc_type=="demonnano"):
     calc = DemonNano(label='rundir/',input_arguments=input_arguments)
     calc2 = DemonNano(label='rundir/',input_arguments=input_arguments2)
@@ -89,7 +93,6 @@ if (calc_type=="schnet"):
     calc2 = SpkCalculator(model2, device="cpu", energy="energy", forces="forces")
     if do_3state:
         calc3 = SpkCalculator(model3, device="cpu", energy="energy", forces="forces")
-
 # read geometry from file and set calculator
 atoms=read('geom-phen.xyz')
 # Set the momenta corresponding to T=300K
@@ -105,9 +108,7 @@ velo[:,1]=data.y
 velo[:,2]=data.z
 atoms.set_velocities(velo/fs)
 # we want to run MD with constant energy using the VelocityVerlet algorithm. 
-dyn = VelocityVerlet(atoms, step_md * fs)	
-#, trajectory='md.traj', logfile='md.log')
-
+dyn = VelocityVerlet(atoms, step_md * fs)	#, trajectory='md.traj', logfile='md.log')
 # dynamical variables
 gap_mid_down = np.zeros(n_md+1,dtype=np.float64)
 gap_mid_up = np.zeros(n_md+1,dtype=np.float64)
@@ -119,9 +120,9 @@ t_step = t_step*step_md
 j_md=0
 tau_0 = 0.02418881
 dt = step_md/tau_0
-
+# output file
 df = open("gaps.txt","w+")
-
+# set initially excited state
 if flag_es==3:
     atoms.set_calculator(calc2)
 else:
@@ -147,7 +148,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
     global force_up_t1,force_down_t2,force_down_t1,force_up_t2,force_mid_t1,force_mid_t2
     global coordinates_t1,coordinates,velocities,velocities_t1,masses   
     global ekin,epot,gaps_mid_down, gaps_mid_up
-    """TSH driver for 3-state model."""
+    """TSH driver for 2- or 3-state model"""
     if j_md == 0:
         coordinates_t1 = a.get_positions()
         velocities_t1 = a.get_velocities()
@@ -168,9 +169,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
         force_down_t2 = a.get_forces()*Bohr/Hartree    
         a.set_calculator(calc2)
         force_mid_t2 = a.get_forces()*Bohr/Hartree    
-    #print("STEP {}".format(j_md))
-    #print(force_up_t2)
-    #print(force_mid_t2)
+    # function to attempt a hopping event
     def check_hop(atoms,energy_kin,energy_pot,gap,force_upper_t2,force_upper_t1,force_lower_t2,force_lower_t1,target_state):
         global flag_es, j_md
         global coordinates_t1, velocities_t1, dt
@@ -208,7 +207,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
             # TODO : MANAGE UNITS OF VELOCITY 
             dGxVelo = np.tensordot(dGc,velocities_t1*conversion_velo)
             if (dGxVelo < 0.0):
-                print('negative product, use BL',flush=True)
+                print('negative product, use BL at ',j_md-1,flush=True)
                 if not small_dgap:
                     factor=0.5*np.sqrt(gap[j_md-1]/dgap)
                 else:
@@ -334,7 +333,6 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
                  gap_mid_down[j_md-1]*Hartree,gap_mid_up[j_md-1]*Hartree,float(p_down),float(p_up),flag_es))
         df.flush()
         fsync(df)
-        # comment the line below to enable only one hop along the trajectory if not - several hops (also upward) are allowed
 
     ekin = a.get_kinetic_energy()/Hartree
     epot = a.get_potential_energy()/Hartree 
@@ -349,6 +347,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
         # decrement j_md because we kind of make a step back in time and skip next step
         j_md -= 1
         skip_next = True
+        # comment the line below to enable only one hop along the trajectory if not - several hops (also upward) are allowed
         hop = False
     
     j_md += 1
@@ -359,5 +358,4 @@ dyn.run(n_md)
 
 df.close()
 print('finished',flush=True)
-exit()
 
