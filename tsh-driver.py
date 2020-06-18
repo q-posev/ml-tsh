@@ -340,7 +340,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
     coordinates_t1 = coordinates
     force_up_t1 = force_up_t2
     force_down_t1 = force_down_t2
-    force_mid_t1 = force_down_t2
+    force_mid_t1 = force_mid_t2
     if skip_next:
         skip_next = False
     if hop:
