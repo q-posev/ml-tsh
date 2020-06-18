@@ -1,5 +1,6 @@
 */
 slurm-*
-submit-chdb-py-dftb.sh
+submit-chdb-dftb.sh
 submit-oly-single.sh
-
+plt-aver-occ-3state.py
+archive-oly.sh
