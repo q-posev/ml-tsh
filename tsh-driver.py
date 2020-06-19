@@ -181,7 +181,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
         p_lz = 0.0
         small_dgap = False
         # check for the local minimum of the energy gap between 2 states
-        if (gap[j_md-1] <= gap[j_md]) and (gap[j_md-2] >= gap[j_md-1]):
+        if (gap[j_md-1] < gap[j_md]) and (gap[j_md-2] > gap[j_md-1]):
             #print('Possible crossing at {}'.format(j_md))
             # Landau-Zener part
             dgap = (gap[j_md] - 2.0*gap[j_md-1] + gap[j_md-2])/(dt*dt)
@@ -204,7 +204,6 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
             # dGc*velo has to be in a.u. 
             tau = 0.02418881
             conversion_velo = fs*tau/Bohr	#fs/(tau*Bohr)
-            # TODO : MANAGE UNITS OF VELOCITY 
             dGxVelo = np.tensordot(dGc,velocities_t1*conversion_velo)
             if (dGxVelo < 0.0):
                 print('negative product, use BL at ',j_md-1,flush=True)
