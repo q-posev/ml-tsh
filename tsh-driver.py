@@ -203,7 +203,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
             dGc /= dt
             # dGc*velo has to be in a.u. 
             tau = 0.02418881
-            conversion_velo = fs/(tau*Bohr)
+            conversion_velo = fs*tau/Bohr	#fs/(tau*Bohr)
             # TODO : MANAGE UNITS OF VELOCITY 
             dGxVelo = np.tensordot(dGc,velocities_t1*conversion_velo)
             if (dGxVelo < 0.0):
