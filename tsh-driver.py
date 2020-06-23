@@ -180,6 +180,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
         p_zn = 0.0
         p_lz = 0.0
         small_dgap = False
+        v_diab = 0.0
         # check for the local minimum of the energy gap between 2 states
         if (gap[j_md-1] < gap[j_md]) and (gap[j_md-2] > gap[j_md-1]):
             #print('Possible crossing at {}'.format(j_md))
@@ -233,9 +234,10 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
             else:
                 do_plus = False
             force_prod = np.sqrt(np.abs(force_prod_acc))
-     
-            a2 = 0.5*force_diff*force_prod/(np.power(2.0*gap[j_md-1],3))
-            b2 = energy_kin*force_diff/(force_prod*2.0*gap[j_md-1])
+            
+            v_diab = gap[j_md-1]/2.0
+            a2 = 0.5*force_diff*force_prod/(np.power(2.0*v_diab,3))
+            b2 = energy_kin*force_diff/(force_prod*2.0*v_diab)
             if (a2<0.0) or (b2<0.0) :
                 print('Alert!',flush=True)
             root = 0.0
