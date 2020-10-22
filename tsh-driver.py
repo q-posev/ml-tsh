@@ -122,6 +122,7 @@ tau_0 = 0.02418881
 dt = step_md/tau_0
 # output file
 df = open("gaps.txt","w+")
+#df2 = open("energies.txt","w+")
 # set initially excited state
 if flag_es==3:
     atoms.set_calculator(calc2)
@@ -189,7 +190,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
             #dgap2 = (gap[j_md+1] - 2.0*gap[j_md] + gap[j_md-1])/(dt*dt)
             # compute Landau-Zener probability
             if(dgap<1E-12):
-                print('alert, small or negative d^2/dt^2',dgap,flush=True)
+                #print('alert, small or negative d^2/dt^2',dgap,flush=True)
                 small_dgap = True
             else:
                 c_ij = np.power(gap[j_md-1],3)/dgap
@@ -207,7 +208,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
             conversion_velo = fs*tau/Bohr	#fs/(tau*Bohr)
             dGxVelo = np.tensordot(dGc,velocities_t1*conversion_velo)
             if (dGxVelo < 0.0):
-                print('negative product, use BL at ',j_md-1,flush=True)
+                #print('negative product, use BL at ',j_md-1,flush=True)
                 if not small_dgap:
                     factor=0.5*np.sqrt(gap[j_md-1]/dgap)
                 else:
@@ -249,31 +250,32 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
             if not small_dgap:
                 p_zn = np.exp(-np.pi*0.25*np.sqrt(2.0/(a2*root)))
             else:
-                print('Issue with second derivative of gap in BL',flush=True)
+                #print('Issue with second derivative of gap in BL',flush=True)
                 p_zn = 0.0
             # comparison with a random number
             if do_hop and (not hop):
                 xi = np.random.rand(1)
                 if xi <= p_lz and do_lz:
-                    print('Attempted hop according to Landau-Zener at {}'.format(j_md-1),flush=True)
-                    print('Landau-Zener prob: {}'.format(float(p_lz)),flush=True)
+                    #print('Attempted hop according to Landau-Zener at {}'.format(j_md-1),flush=True)
+                    #print('Landau-Zener prob: {}'.format(float(p_lz)),flush=True)
                     hop = True
                 elif xi <= p_zn and do_zn:
-                    print('Attempted hop according to Zhu-Nakamura at {}'.format(j_md-1),flush=True)
-                    print('Zhu-Nakamura prob: {}'.format(float(p_zn)),flush=True)
+                    #print('Attempted hop according to Zhu-Nakamura at {}'.format(j_md-1),flush=True)
+                    #print('Zhu-Nakamura prob: {}'.format(float(p_zn)),flush=True)
                     hop = True
                 elif xi <= p_zn and xi <= p_lz and do_both:
-                    print('Attempted hop according to LZ and ZN at {} !'.format(j_md-1),flush=True)
-                    print('LZ and ZN probs: {0} {1}'.format(float(p_lz),float(p_zn)),flush=True)
+                    #print('Attempted hop according to LZ and ZN at {} !'.format(j_md-1),flush=True)
+                    #print('LZ and ZN probs: {0} {1}'.format(float(p_lz),float(p_zn)),flush=True)
                     hop = True
 
                 betta = gap[j_md-1]/energy_kin
                 # check for frustrated hop condition should be imposed only for upward hops because for hops down betta is always positive 
                 if (hop and betta > 1.0 and target_state>flag_es):
-                    print("Rejected (frustrated) hop at",j_md-1, betta,flush=True)
+                    #print("Rejected (frustrated) hop at",j_md-1, betta,flush=True)
                     hop = False
                 if hop :
-                    print('Switch from {0} to {1}'.format(flag_es,target_state),flush=True)
+                    #print('Switch from {0} to {1}'.format(flag_es,target_state),flush=True)
+                    print('{0} {1}'.format(target_state, gap[j_md-1]))
                     # make one MD step back since local minimum was at t and we are at t+dt 
                     a.set_positions(coordinates_t1)
             	    # velocity rescaling to conserve total energy
@@ -313,9 +315,9 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
     p_down = 0.0
     if j_md > 1 and not skip_next:
         if flag_es==3:
+            p_down = check_hop(a,ekin,epot,gap_mid_down,force_mid_t2,force_mid_t1,force_down_t2,force_down_t1,flag_es-1)
             if do_3state:
                 p_up = check_hop(a,ekin,epot,gap_mid_up,force_up_t2,force_up_t1,force_mid_t2,force_mid_t1,flag_es+1)
-            p_down = check_hop(a,ekin,epot,gap_mid_down,force_mid_t2,force_mid_t1,force_down_t2,force_down_t1,flag_es-1)
         elif flag_es==2:
             p_up   = check_hop(a,ekin,epot,gap_mid_down,force_mid_t2,force_mid_t1,force_down_t2,force_down_t1,flag_es+1)
         elif flag_es==4 and do_3state:
@@ -330,10 +332,13 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
     	a.set_calculator(calc3)
     # data output (time,energy gap in eV, up and down hopping probabilities, active state)
     if j_md > 0 and not skip_next:
-        df.write('{0:0.2f} {1:0.5f} {2:0.5f} {3:0.5f} {4:0.5f} {5}\n'.format(t_step[j_md-1],\
-                 gap_mid_down[j_md-1]*Hartree,gap_mid_up[j_md-1]*Hartree,float(p_down),float(p_up),flag_es))
-        df.flush()
-        fsync(df)
+        df.write('{0:0.2f} {1:0.5f} {2:0.5f} {3:0.5f} {4:0.5f} {5:0.5f} {6}\n'.format(t_step[j_md-1],\
+                 float(epot_down*Hartree),float(epot_mid*Hartree),float(epot_up*Hartree),float(epot*Hartree),\
+                 float(p_down),float(p_up),flag_es))
+        #df.write('{0:0.2f} {1:0.5f} {2:0.5f} {3:0.5f} {4:0.5f} {5}\n'.format(t_step[j_md-1],\
+                 #gap_mid_down[j_md-1]*Hartree,gap_mid_up[j_md-1]*Hartree,float(p_down),float(p_up),flag_es))
+        #df.flush()
+        #fsync(df)
 
     ekin = a.get_kinetic_energy()/Hartree
     epot = a.get_potential_energy()/Hartree 
@@ -358,5 +363,6 @@ dyn.attach(tsh, interval=1)
 dyn.run(n_md)
 
 df.close()
-print('finished',flush=True)
+#df2.close()
+#print('finished',flush=True)
 
