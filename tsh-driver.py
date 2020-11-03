@@ -107,6 +107,7 @@ velo[:,0]=data.x
 velo[:,1]=data.y
 velo[:,2]=data.z
 atoms.set_velocities(velo/fs)
+#print(atoms.get_kinetic_energy()/ (1.5 * kB* len(atoms)))  
 # we want to run MD with constant energy using the VelocityVerlet algorithm. 
 dyn = VelocityVerlet(atoms, step_md * fs)	#, trajectory='md.traj', logfile='md.log')
 # dynamical variables
@@ -118,7 +119,7 @@ t_step = np.arange(0, n_md)
 t_step = t_step*step_md
 
 j_md=0
-tau_0 = 0.02418881
+tau_0 = 0.02418884326
 dt = step_md/tau_0
 # output file
 df = open("gaps.txt","w+")
@@ -143,8 +144,11 @@ masses = atoms.get_masses()
 
 ekin = 666.0
 epot = 666.0
+    
+skip_count = 0
+
 def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
-    global j_md, flag_es
+    global j_md, flag_es, skip_count
     global do_hop, hop, skip_next
     global force_up_t1,force_down_t2,force_down_t1,force_up_t2,force_mid_t1,force_mid_t2
     global coordinates_t1,coordinates,velocities,velocities_t1,masses   
@@ -195,16 +199,16 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
             else:
                 c_ij = np.power(gap[j_md-1],3)/dgap
                 p_lz = np.exp(-0.5*np.pi*np.sqrt(c_ij)) 
+
+            tau = 0.02418884326
+            print('{0} {1} {2}'.format(dt*(j_md-1)*tau,dgap,np.power(gap[j_md-1],3)))
+
             # Zhu-Nakamura part
-            # compute diabatic gradients according to Yu et al. 2014 (PCCP)
-            #force1_x = (force_down_t3*(coordinates-coordinates_t1) - force_up_t1*(coordinates-coordinates_t3))/(coordinates_t3-coordinates_t1)
-            #force2_x = (force_up_t3*(coordinates-coordinates_t1) - force_down_t1*(coordinates-coordinates_t3))/(coordinates_t3-coordinates_t1)
             # compute diabatic gradients according to Hanasaki et al. 2018 (JCP)
             sum_G = force_upper_t2+force_lower_t2
             dGc = (force_upper_t2-force_lower_t2) - (force_upper_t1-force_lower_t1)
             dGc /= dt
             # dGc*velo has to be in a.u. 
-            tau = 0.02418881
             conversion_velo = fs*tau/Bohr	#fs/(tau*Bohr)
             dGxVelo = np.tensordot(dGc,velocities_t1*conversion_velo)
             if (dGxVelo < 0.0):
@@ -275,7 +279,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
                     hop = False
                 if hop :
                     #print('Switch from {0} to {1}'.format(flag_es,target_state),flush=True)
-                    print('{0} {1}'.format(target_state, gap[j_md-1]))
+                    #print('{0} {1}'.format(target_state, gap[j_md-1]))
                     # make one MD step back since local minimum was at t and we are at t+dt 
                     a.set_positions(coordinates_t1)
             	    # velocity rescaling to conserve total energy
@@ -291,8 +295,9 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
         else:
             return p_lz
 
+    epot_up = 0.0
     # reset calculators to compute other energies   
-    if not skip_next:
+    if skip_count!=1:	#not skip_next:
         a.set_calculator(calc)
         epot_down = a.get_potential_energy()/Hartree    
         a.set_calculator(calc2)
@@ -301,7 +306,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
             a.set_calculator(calc3)
             epot_up = a.get_potential_energy()/Hartree    
             gap_mid_up[j_md] = np.abs(epot_up - epot_mid)
-
+ 
         gap_mid_down[j_md] = np.abs(epot_mid - epot_down)
 
     if flag_es==3:
@@ -331,7 +336,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
     elif flag_es==4 and do_3state:
     	a.set_calculator(calc3)
     # data output (time,energy gap in eV, up and down hopping probabilities, active state)
-    if j_md > 0 and not skip_next:
+    if j_md > 0 and skip_count!=1 :	# and not skip_next:
         df.write('{0:0.2f} {1:0.5f} {2:0.5f} {3:0.5f} {4:0.5f} {5:0.5f} {6}\n'.format(t_step[j_md-1],\
                  float(epot_down*Hartree),float(epot_mid*Hartree),float(epot_up*Hartree),float(epot*Hartree),\
                  float(p_down),float(p_up),flag_es))
@@ -348,11 +353,17 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
     force_down_t1 = force_down_t2
     force_mid_t1 = force_mid_t2
     if skip_next:
-        skip_next = False
+        if skip_count==3:
+            skip_count = 0
+            skip_next = False
+        else:
+            skip_count += 1
+
     if hop:
         # decrement j_md because we kind of make a step back in time and skip next step
         j_md -= 1
         skip_next = True
+
         # comment the line below to enable only one hop along the trajectory if not - several hops (also upward) are allowed
         hop = False
     
