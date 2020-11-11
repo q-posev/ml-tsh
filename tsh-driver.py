@@ -16,6 +16,7 @@ from ase.calculators.demonnano import DemonNano
 from pandas import read_csv
 import numpy as np
 
+from timeit import default_timer as timer
 def get_git_revision_hash():
     return subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()
 def get_git_revision_short_hash():
@@ -123,7 +124,7 @@ tau_0 = 0.02418884326
 dt = step_md/tau_0
 # output file
 df = open("gaps.txt","w+")
-#df2 = open("energies.txt","w+")
+df2 = open("deriv_gaps.txt","w+")
 # set initially excited state
 if flag_es==3:
     atoms.set_calculator(calc2)
@@ -152,7 +153,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
     global do_hop, hop, skip_next
     global force_up_t1,force_down_t2,force_down_t1,force_up_t2,force_mid_t1,force_mid_t2
     global coordinates_t1,coordinates,velocities,velocities_t1,masses   
-    global ekin,epot,gaps_mid_down, gaps_mid_up
+    global ekin,epot,gaps_mid_down, gaps_mid_up, tau_0
     """TSH driver for 2- or 3-state model"""
     if j_md == 0:
         coordinates_t1 = a.get_positions()
@@ -177,7 +178,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
     # function to attempt a hopping event
     def check_hop(atoms,energy_kin,energy_pot,gap,force_upper_t2,force_upper_t1,force_lower_t2,force_lower_t1,target_state):
         global flag_es, j_md
-        global coordinates_t1, velocities_t1, dt
+        global coordinates_t1, velocities_t1, dt, tau_0
         global hop, do_hop
 
         etot = energy_pot + energy_kin
@@ -200,8 +201,9 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
                 c_ij = np.power(gap[j_md-1],3)/dgap
                 p_lz = np.exp(-0.5*np.pi*np.sqrt(c_ij)) 
 
-            tau = 0.02418884326
-            print('{0} {1} {2}'.format(dt*(j_md-1)*tau,dgap,np.power(gap[j_md-1],3)))
+            if target_state==2:
+                df2.write('{0:0.2f} {1} {2} \n'.format(dt*(j_md-1)*tau_0,\
+                                 dgap,np.power(gap[j_md-1],3)))
 
             # Zhu-Nakamura part
             # compute diabatic gradients according to Hanasaki et al. 2018 (JCP)
@@ -209,7 +211,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
             dGc = (force_upper_t2-force_lower_t2) - (force_upper_t1-force_lower_t1)
             dGc /= dt
             # dGc*velo has to be in a.u. 
-            conversion_velo = fs*tau/Bohr	#fs/(tau*Bohr)
+            conversion_velo = fs*tau_0/Bohr
             dGxVelo = np.tensordot(dGc,velocities_t1*conversion_velo)
             if (dGxVelo < 0.0):
                 #print('negative product, use BL at ',j_md-1,flush=True)
@@ -279,7 +281,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
                     hop = False
                 if hop :
                     #print('Switch from {0} to {1}'.format(flag_es,target_state),flush=True)
-                    #print('{0} {1}'.format(target_state, gap[j_md-1]))
+                    print('{0} {1}'.format(target_state, gap[j_md-1]))
                     # make one MD step back since local minimum was at t and we are at t+dt 
                     a.set_positions(coordinates_t1)
             	    # velocity rescaling to conserve total energy
@@ -370,10 +372,16 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
     j_md += 1
 
 # run the molecular dynamics with TSH module
+
+start = timer()
+
 dyn.attach(tsh, interval=1)
 dyn.run(n_md)
 
+end = timer()
+print('Runtime in seconds: {}'.format(end-start))
+
 df.close()
-#df2.close()
+df2.close()
 #print('finished',flush=True)
 
