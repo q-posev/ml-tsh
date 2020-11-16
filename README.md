@@ -6,7 +6,7 @@ The script is currently adapted for an electronic relaxation from S3 excited sta
 
 #### Currently provided:
 
-- tsh-driver.py : initializes and laucnes a singlet trajectory with a set of parameters provided from the command line
+- tsh-driver.py : initializes and laucnes a single trajectory with a set of parameters provided from the command line
 - submit-chdb-py.sh : SLURM submission script to go embarrassingly parallel using chdb placement tool at CALMIP computing center (OLYMPE machine, 2020).
 - clean.sh (TO_REMOVE)
 
@@ -43,9 +43,9 @@ python tsh-driver.py 4000 0.25 schnet lz 3state
 - #4 is the type of a hopping approach for TSH (lz or zn)
 - #5 is the model type based on the number of states included in the propagation (3state or 2state)
 
-_**Note 1: You need to have a set of initial conditions in the same directory as this driver. Geometries and velocities are stored in a geom-phen.xyz and velo files, respectively.**_
+_**Note 1: You need to have a set of initial conditions in the same directory as this driver. Geometries and velocities are stored in geom-phen.xyz and velo files, respectively.**_
 
-_**Note 2: The final number of MD steps in the output file can be different from the input one. This is due to the fact that we actually have to come to the previous MD step if the hop was accepted.**_
+_**Note 2: The final number of MD steps in the output file can be different from the input one. This is due to the fact that we actually have to come to the previous MD step if the hop was accepted (see paper for more details).**_
 
 
 ## Ensemble of trajectories
@@ -65,4 +65,7 @@ _**Note: (OPTIONAL) You can use additional argument to skip first N initial cond
 placement --checkme
 ```
 
+## Post-processing and visualisation
+
+The script required for post-processing and visualisation is provided upon request. It relies on additional Python packages (matplotlib and scipy) to fit and plot the results. Alternatively, one can adapt the existing plot-tsh-occs.py script (see https://github.com/q-posev/fit_and_plot).
 
