@@ -7,8 +7,7 @@ The script is currently adapted for an electronic relaxation from S3 excited sta
 #### Currently provided:
 
 - tsh-driver.py : initializes and laucnes a single trajectory with a set of parameters provided from the command line
-- submit-chdb-py.sh : SLURM submission script to go embarrassingly parallel using chdb placement tool at CALMIP computing center (OLYMPE machine, 2020).
-- clean.sh (TO_REMOVE)
+- submit-chdb-py.sh : SLURM submission script to go embarrassingly parallel using chdb placement tool at CALMIP computing center (OLYMPE machine, 2020)
 
 #### Requirements (versions used at CALMIP):
 - python 3 	(3.6.9)
