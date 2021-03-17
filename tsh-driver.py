@@ -1,6 +1,5 @@
 from os import path, fsync
-from sys import argv
-from timeit import default_timer as timer
+from sys import argv, exit
 import subprocess
 
 from schnetpack.interfaces import SpkCalculator
@@ -20,14 +19,12 @@ import numpy as np
 def get_git_revision_hash():
     return subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()
 print('Last git commit: {}'.format(get_git_revision_hash()))
-#def get_git_revision_short_hash():
-#    return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).strip()
-#print('Shorter hash: {}'.format(get_git_revision_short_hash()))
 
 assert len(argv)>4, 'Not all arguments provided'
-# number and size of MD steps from the arguments passed through command line
+# number of MD steps
 n_md = int(argv[1])
-step_md = float(argv[2])  #in fs
+# md time step in fs (e.g. 0.25)
+step_md = float(argv[2])  
 # type of calculator (demonnano or schnet)
 calc_type = argv[3]  
 # type of hopping strategy (lz or zn)
@@ -119,12 +116,12 @@ tau_0 = 0.02418884326
 dt = step_md/tau_0
 # output files
 df = open("gaps.txt","w+")
-df2 = open("deriv_gaps.txt","w+")
 # set calculator according to initally excited state
 if flag_es==3:
     atoms.set_calculator(calc2)
 else:
-    print("Are you sure?",flush=True)
+    print("undefined behaviour")
+    exit()
 # seed random number generator for reproducible results
 #np.random.seed(1)
 # properties required for ZN
@@ -137,7 +134,8 @@ force_down_t2 = atoms.get_forces()*Bohr/Hartree
 # common properties
 coordinates = atoms.get_positions()
 velocities = atoms.get_velocities()
-masses = atoms.get_masses()
+m0 = 1836.23
+masses = atoms.get_masses()*m0
 
 ekin = 666.0
 epot = 666.0
@@ -186,7 +184,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
         v_diab = 0.0
         # check for the local minimum of the energy gap
         if (gap[j_md-1] < gap[j_md]) and (gap[j_md-2] > gap[j_md-1]):
-            # finited difference calculations of second time derivative
+            # finite difference calculation of second order derivative
             dgap = (gap[j_md] - 2.0*gap[j_md-1] + gap[j_md-2])/(dt*dt)
             # compute Belyaev-Lebedev probability
             if(dgap<1E-12):
@@ -195,10 +193,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
             else:
                 c_ij = np.power(gap[j_md-1],3)/dgap
                 p_lz = np.exp(-0.5*np.pi*np.sqrt(c_ij)) 
-            # output second time derivative between S2 and S3
-            if target_state==2:
-                df2.write('{0:0.2f} {1} {2} \n'.format(dt*(j_md-1)*tau_0,\
-                                 dgap,np.power(gap[j_md-1],3))) 
+
             # compute diabatic gradients for ZN
             sum_G = force_upper_t2+force_lower_t2
             dGc = (force_upper_t2-force_lower_t2) - (force_upper_t1-force_lower_t1)
@@ -264,8 +259,6 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
                 if (hop and betta > 1.0 and target_state>flag_es):
                     hop = False
                 if hop :
-                    # output energy gap at the hopping point
-                    # print('{0} {1}'.format(target_state, gap[j_md-1]))
                     # make one MD step back since local minimum was at t and we are at t+dt 
                     a.set_positions(coordinates_t1)
             	    # velocity rescaling to conserve total energy
@@ -294,7 +287,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
             gap_mid_up[j_md] = np.abs(epot_up - epot_mid)
  
         gap_mid_down[j_md] = np.abs(epot_mid - epot_down)
-    # set back the calculator to the running state
+    # set the calculator back to the running state
     if flag_es==3:
         a.set_calculator(calc2)
     elif flag_es==2:
@@ -314,7 +307,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
             p_up   = check_hop(a,ekin,epot,gap_mid_down,force_mid_t2,force_mid_t1,force_down_t2,force_down_t1,flag_es+1)
         elif flag_es==4 and do_3state:
             p_down = check_hop(a,ekin,epot,gap_mid_up,force_up_t2,force_up_t1,force_mid_t2,force_mid_t1,flag_es-1)
-    # set SPK model back to running state this already takes into account the switch if performed
+    # set the calculatior back to the running state, this already takes into account the switch if performed
     if flag_es==3:
         a.set_calculator(calc2)
     elif flag_es==2:
@@ -351,13 +344,10 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
     j_md += 1
 
 """Launcher for molecular dynamics"""
-start = timer()
 # run MD for n_md steps with TSH module
 dyn.attach(tsh, interval=1)
 dyn.run(n_md)
-# evaluate the runtime
-end = timer()
-print('Runtime in seconds: {}'.format(end-start))
+
 # close data files
 df.close()
-df2.close()
+
