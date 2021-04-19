@@ -1,6 +1,6 @@
 from os import path, fsync
 from sys import argv
-from timeit import default_timer as timer
+
 import subprocess
 
 from schnetpack.interfaces import SpkCalculator
@@ -20,9 +20,6 @@ import numpy as np
 def get_git_revision_hash():
     return subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()
 print('Last git commit: {}'.format(get_git_revision_hash()))
-#def get_git_revision_short_hash():
-#    return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).strip()
-#print('Shorter hash: {}'.format(get_git_revision_short_hash()))
 
 assert len(argv)>4, 'Not all arguments provided'
 # number and size of MD steps from the arguments passed through command line
@@ -67,10 +64,16 @@ hop = False
 skip_next = False
 
 # SchNet calculator
-model = load_model(path1,map_location=torch_device('cpu'))
-model2 = load_model(path2,map_location=torch_device('cpu'))
+model_s = load_model(path1,map_location=torch_device('cpu'))
+model2_s = load_model(path2,map_location=torch_device('cpu'))
 if do_3state:
-    model3 = load_model(path3,map_location=torch_device('cpu'))
+    model3_s = load_model(path3,map_location=torch_device('cpu'))
+
+model = model_s.double()
+model2 = model2_s.double()
+if do_3state:
+    model3 = model3_s.double()
+
 # demon-nano calculator
 input_arguments = {'DFTB': 'SCC LRESP EXST=2',
                    'CHARGE': '0.0',
@@ -137,7 +140,9 @@ force_down_t2 = atoms.get_forces()*Bohr/Hartree
 # common properties
 coordinates = atoms.get_positions()
 velocities = atoms.get_velocities()
-masses = atoms.get_masses()
+
+m0 = 1836.229
+masses = atoms.get_masses()*m0
 
 ekin = 666.0
 epot = 666.0
@@ -196,9 +201,9 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
                 c_ij = np.power(gap[j_md-1],3)/dgap
                 p_lz = np.exp(-0.5*np.pi*np.sqrt(c_ij)) 
             # output second time derivative between S2 and S3
-            if target_state==2:
-                df2.write('{0:0.2f} {1} {2} \n'.format(dt*(j_md-1)*tau_0,\
-                                 dgap,np.power(gap[j_md-1],3))) 
+            #if target_state==2:
+            #    df2.write('{0:0.2f} {1} {2} \n'.format(dt*(j_md-1)*tau_0,\
+            #                     dgap,np.power(gap[j_md-1],3))) 
             # compute diabatic gradients for ZN
             sum_G = force_upper_t2+force_lower_t2
             dGc = (force_upper_t2-force_lower_t2) - (force_upper_t1-force_lower_t1)
@@ -265,7 +270,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
                     hop = False
                 if hop :
                     # output energy gap at the hopping point
-                    # print('{0} {1}'.format(target_state, gap[j_md-1]))
+                    print('{0} {1}'.format(target_state, gap[j_md-1]))
                     # make one MD step back since local minimum was at t and we are at t+dt 
                     a.set_positions(coordinates_t1)
             	    # velocity rescaling to conserve total energy
@@ -308,7 +313,7 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
     if j_md > 1 and not skip_next:
         if flag_es==3:
             p_down = check_hop(a,ekin,epot,gap_mid_down,force_mid_t2,force_mid_t1,force_down_t2,force_down_t1,flag_es-1)
-            if do_3state:
+            if do_3state and not hop:
                 p_up = check_hop(a,ekin,epot,gap_mid_up,force_up_t2,force_up_t1,force_mid_t2,force_mid_t1,flag_es+1)
         elif flag_es==2:
             p_up   = check_hop(a,ekin,epot,gap_mid_down,force_mid_t2,force_mid_t1,force_down_t2,force_down_t1,flag_es+1)
@@ -351,13 +356,11 @@ def tsh(a=atoms,dt=dt):  # store a reference to atoms in the definition.
     j_md += 1
 
 """Launcher for molecular dynamics"""
-start = timer()
+
 # run MD for n_md steps with TSH module
 dyn.attach(tsh, interval=1)
 dyn.run(n_md)
-# evaluate the runtime
-end = timer()
-print('Runtime in seconds: {}'.format(end-start))
+
 # close data files
 df.close()
-df2.close()
+#df2.close()
